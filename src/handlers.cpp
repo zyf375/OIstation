@@ -3625,7 +3625,7 @@ std::string Handlers::handleProblemSetDetail(const std::string& method, const st
 // 私信
 // ============================================================
 // ============================================================
-// �� / ���J)F	
+// 系统会话
 // ============================================================
 static const std::string kSystemId = "system";
 
@@ -5161,7 +5161,7 @@ static void parseMultipart(const std::string& body, const std::string& boundary,
         i = body.find(delim, i);
         if (i == std::string::npos) break;
         i += delim.size();
-        if (body.compare(i, 2, "--") == 0) break; // �_�L
+        if (body.compare(i, 2, "--") == 0) break; // 结束
         size_t lineEnd = body.find("\r\n", i);
         if (lineEnd == std::string::npos) break;
         i = lineEnd + 2;
@@ -5338,7 +5338,7 @@ static std::vector<DirEntry> listDirEntries(const std::string& dir) {
     return out;
 }
 
-// r�����A�P�U�݊C	
+// 规范化相对路径（去掉 .. 与绝对路径成分）
 static std::string sanitizeRelPath(const std::string& p) {
     std::string out;
     for (char ch : p) {
@@ -5351,7 +5351,7 @@ static std::string sanitizeRelPath(const std::string& p) {
     return out;
 }
 
-// R d���U	
+// 递归删除目录
 static void deletePathRecursive(const std::string& path) {
     DWORD attrs = GetFileAttributesA(path.c_str());
     if (attrs == INVALID_FILE_ATTRIBUTES) return;

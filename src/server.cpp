@@ -31,14 +31,14 @@
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "ws2_32.lib")
 
-// ========== ȫ������ ==========
+// ========== 全局声明 ==========
 #define OLLAMA_MODEL "deepseek-chat"
 #define OLLAMA_URL L"https://api.deepseek.com/chat/completions"
 #define TOKEN_FILE "./data/tokens.json"
 #include <windows.h>
 #include <tlhelp32.h>
 
-// ========== Token �ṹ�� ==========
+// ========== Token 结构体 ==========
 struct TokenCode {
     std::string code;
     int amount;
@@ -48,7 +48,7 @@ struct TokenCode {
     std::string expiresAt;
 };
 
-// ========== Token ������ ==========
+// ========== Token 管理器 ==========
 class TokenManager {
 private:
     std::unordered_map<std::string, TokenCode> tokens;
@@ -198,7 +198,7 @@ public:
 };
 
 
-// ========== LLM ������ ==========
+// ========== LLM 处理器 ==========
 class LLMHandler {
 private:
     std::string modelName = OLLAMA_MODEL;
@@ -348,7 +348,7 @@ public:
     }
 };
 
-// ========== ��̬�ļ� MIME ӳ�� ==========
+// ========== 静态文件 MIME 映射 ==========
 static std::map<std::string, std::string> g_extraMimeTypes = {
     {".html", "text/html; charset=utf-8"},
     {".htm", "text/html; charset=utf-8"},
@@ -450,7 +450,7 @@ std::string HttpServer::base64Encode(const std::string& input) {
     return output;
 }
 
-// ========== WebSocket ֡���� ==========
+// ========== WebSocket 帧解析 ==========
 std::string HttpServer::decodeWebSocketFrame(const std::string& data) {
     if (data.length() < 2) return "";
     unsigned char opcode = data[0] & 0x0F;
@@ -490,7 +490,7 @@ std::string HttpServer::buildWebSocketFrame(const std::string& data) {
     return frame;
 }
 
-// ========== ��Ϸ��������� ==========
+// ========== 游戏管理器实例 ==========
 class GameRoom {
 public:
     std::string roomId;
@@ -568,7 +568,7 @@ public:
     }
 };
 
-// ========== HttpServer ʵ�� ==========
+// ========== HttpServer 实现 ==========
 HttpServer::HttpServer(int p) : port(p), serverFd(INVALID_SOCKET), running(false), wsInitialized(false) {
     
     WSADATA wsaData;
@@ -662,7 +662,7 @@ std::string HttpServer::getClientRoom(const std::string& clientId) {
     return roomManager->getClientRoom(clientId);
 }
 
-// ========== �û���֤ ==========
+// ========== 用户认证 ==========
 bool HttpServer::authenticateUser(const std::string& username, const std::string& password, std::string& userId) {
     for (const auto& user : dataStore->users) {
         if (user.username == username && common::passwordVerify(password, user.password)) {
@@ -2993,7 +2993,7 @@ void HttpServer::sendPlayerList(const std::string& roomId) {
 }
 
 
-// ========== WebSocket ���� ==========
+// ========== WebSocket 处理 ==========
 void HttpServer::handleWebSocketHandshake(SOCKET fd, const std::map<std::string, std::string>& headers) {
     std::string wsKey;
     auto it = headers.find("sec-websocket-key");
@@ -3020,7 +3020,7 @@ void HttpServer::handleWebSocketHandshake(SOCKET fd, const std::map<std::string,
         socketClients[fd] = clientId;
         clientSockets[clientId] = fd;
     }
-    std::cout << "[WS] ���ֳɹ�, clientId: " << clientId << std::endl;
+    std::cout << "[WS] connected, clientId: " << clientId << std::endl;
 
     roomManager->joinRoom(clientId, "default", "default");
 
@@ -3032,7 +3032,7 @@ void HttpServer::handleWebSocketHandshake(SOCKET fd, const std::map<std::string,
             std::string data(buffer, n);
             std::string msg = decodeWebSocketFrame(data);
             if (!msg.empty()) {
-                std::cout << "[WS] �յ���Ϣ from " << clientId << ": " << msg.substr(0, 100) << (msg.length()>100?"...":"") << std::endl;
+                std::cout << "[WS] message from " << clientId << ": " << msg.substr(0, 100) << (msg.length()>100?"...":"") << std::endl;
                 auto msgData = common::jsonParseObject(msg);
                 bool isGame = (msgData.count("type") && msgData.at("type") == "game");
                 if (isGame) {
@@ -3046,7 +3046,7 @@ void HttpServer::handleWebSocketHandshake(SOCKET fd, const std::map<std::string,
                 }
             }
         } else if (n == 0) {
-            std::cout << "[WS] �ͻ��˶Ͽ�: " << clientId << std::endl;
+            std::cout << "[WS] client disconnected: " << clientId << std::endl;
             break;
         } else {
             int error = WSAGetLastError();
@@ -3054,7 +3054,7 @@ void HttpServer::handleWebSocketHandshake(SOCKET fd, const std::map<std::string,
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             } else {
-                std::cout << "[WS] recv ����: " << error << std::endl;
+                std::cout << "[WS] recv error: " << error << std::endl;
                 break;
             }
         }
@@ -3069,7 +3069,7 @@ void HttpServer::handleWebSocketHandshake(SOCKET fd, const std::map<std::string,
     closesocket(fd);
 }
 
-// ========== HTTP �ͻ��˴��� ==========
+// ========== HTTP 客户端处理 ==========
 
 // Read the full HTTP request (headers + body per Content-Length).
 // The previous code only did one recv() into an 8KB buffer, so any
@@ -3168,14 +3168,14 @@ void HttpServer::handleClient(SOCKET clientFd, const std::string& clientIp) {
     size_t pos = request.find("\r\n\r\n");
     if (pos != std::string::npos) body = request.substr(pos + 4);
 
-    // LLM ·��
+    // LLM 路由
     if (path.find("/llm") == 0 || path.find("/v1/") == 0 || path == "/v1" || path.find("/api/ai/") == 0) {
         handleLLMRequest(clientFd, path, headers, body);
         closesocket(clientFd);
         return;
     }
 
-    // ��̬�ļ�·��
+    // 静态文件路径
     std::string sessionId;
     auto _it = headers.find("cookie");
     if (_it != headers.end()) {
@@ -3244,7 +3244,7 @@ void HttpServer::handleClient(SOCKET clientFd, const std::string& clientIp) {
     closesocket(clientFd);
 }
 
-// ========== �������� ==========
+// ========== 主函数 ==========
 void HttpServer::sendResponse(SOCKET fd, int statusCode, const std::string& statusMsg,
                               const std::map<std::string, std::string>& headers,
                               const std::string& body) {

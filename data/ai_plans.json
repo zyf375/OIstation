@@ -1,4 +1,0 @@
-{"desc":"体验 OI 助手，5 小时 20 / 每月 60算力点","id":"free","models":"nvidia/nemotron-3.5-super-vl:free;gpt-6-luna;glm-4.5","monthQuota":"60","name":"免费版","price":"0.00","windowQuota":"20"}
-{"desc":"日常刷题与讲解，5 小时 120 / 每月 400 算力点","id":"member","models":"glm-5.3-flash;gpt-6-luna;glm-4.5;nvidia/nemotron-3.5-super-vl:free","monthQuota":"400","name":"会员版","price":"0.00","windowQuota":"120"}
-{"desc":"高强度训练，5 小时 500 / 每月 1500 算力点","id":"pro","models":"gpt-6-luna;deepseek-v4-pro;glm-5.3;glm-5.3-flash","monthQuota":"1500","name":"专业版","price":"0.00","windowQuota":"500"}
-{"desc":"","id":"admin","models":"","monthQuota":"2000","name":"admin","price":"0.00","windowQuota":"200"}

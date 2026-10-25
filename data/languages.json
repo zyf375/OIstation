@@ -1,0 +1,4 @@
+{"compileCmd":"\"{gpp}\" -O2 -std=c++11 -static \"{src}\" -o \"{out}\"","enabled":"1","ext":"cpp","id":"cpp","name":"C++11(O2)","runCmd":""}
+{"compileCmd":"\"{gpp}\" -static \"{src}\" -o \"{out}\"","enabled":"1","ext":"cpp","id":"c++20","name":"c++20(not O2)","runCmd":""}
+{"compileCmd":"\"{gpp}\" -O2 -std=c++17 -static \"{src}\" -o \"{out}\"","enabled":"1","ext":"cpp","id":"C++17(O2)","name":"C++17(O2)","runCmd":""}
+{"compileCmd":"\"{gpp}\" -O2 -std=c++14 -static \"{src}\" -o \"{out}\"","enabled":"1","ext":"cpp","id":"C++14(O2)","name":"C++14(O2)","runCmd":""}

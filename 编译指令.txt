@@ -1,0 +1,3 @@
+mingw64/bin/g++ -std=c++11 src/*.cpp -o OIstation.exe -lwinhttp -lws2_32 -static -lpsapi -fexec-charset=UTF-8
+实际路径：E:\LL\CodeDuel\tools\mingw64\bin\g++.exe
+（编译前先结束 OIstation 进程；启动后 http://localhost:8083）

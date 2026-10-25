@@ -1,0 +1,151 @@
+    if (path == "/llm/api/chat") {
+        auto req = common::jsonParseObject(body);
+        std::string userMessage = req.count("message") ? req["message"] : "";
+        std::string model = (req.count("model") && !req["model"].empty()) ? req["model"] : aiCfg().model;
+        std::string history = req.count("history") ? req["history"] : "[]";
+        std::string task = req.count("task") ? req["task"] : "chat";
+        bool allowTools = !(req.count("tools") && req["tools"] == "0");
+        if (userMessage.empty() && task == "chat") {
+            llmSendJson(fd, 400, "{\"error\":\"消息为空\"}");
+            return;
+        }
+        aiquota::Info _qi = aiquota::info(user->id, user->aiWindowQuota, user->aiMonthQuota);
+        long long _remain = aiquota::remaining(_qi);
+        if (_remain < 1) {
+            std::string why = (_qi.windowQuota - _qi.windowUsed <= 0)
+                ? ("5 小时额度已用完（" + std::to_string(_qi.windowUsed) + "/" + std::to_string(_qi.windowQuota) + " 算力点），请稍后再试")
+                : ("本月额度已用完（" + std::to_string(_qi.monthUsed) + "/" + std::to_string(_qi.monthQuota) + " 算力点）");
+            llmSendJson(fd, 402, "{\"error\":" + common::jsonStringify(why) + ",\"code\":\"QUOTA_EXCEEDED\",\"quota\":" + aiquota::jsonOf(_qi) + "}");
+            return;
+        }
+
+        // ---------- 按用途组装提示词 ----------
+        std::string sysText;
+        std::string userText = userMessage;
+        if (task == "debug") {
+            std::string pid = req.count("problemId") ? common::trim(req["problemId"]) : "";
+            std::string code = req.count("code") ? req["code"] : "";
+            std::string filePath = req.count("filePath") ? common::trim(req["filePath"]) : "";
+            std::string extra = req.count("extra") ? req["extra"] : "";
+            if (code.empty() && !filePath.empty()) {
+                std::string full = aitools::workspaceDir(user->id) + filePath;
+                code = common::readFile(full);
+            }
+            sysText = "你是一名资深 OI 教练，擅长帮学生 debug 竞赛代码。"
+                      "请按顺序回答：1) 这段代码最可能的错误点（结合题目要求与常见坑）；"
+                      "2) 出错原因；3) 具体的修改方法（给出改后的关键代码片段）；"
+                      "4) 建议补充的边界测试数据。使用中文，简洁、分点，不要客套。"
+                      "如果信息不足，主动用工具列出/读取工作区文件或运行命令来验证你的判断。";
+            userText = "【题目】";
+            if (!pid.empty()) {
+                Problem* p = dataStore->findProblemById(pid);
+                if (p) {
+                    userText += "题号 " + p->id + " " + p->title + "\n时间限制 " + std::to_string(p->timeLimit) +
+                                "ms，内存 " + std::to_string(p->memLimit) + "MB\n";
+                    std::string desc = p->description;
+                    if (desc.size() > 3000) desc = desc.substr(0, 3000) + "...";
+                    userText += "题面：" + desc + "\n";
+                    if (!p->inputDesc.empty()) userText += "输入格式：" + p->inputDesc + "\n";
+                    if (!p->outputDesc.empty()) userText += "输出格式：" + p->outputDesc + "\n";
+                    std::string sample;
+                    for (size_t i = 0; i < p->samples.size() && i < 3; i++) sample += p->samples[i] + "\n";
+                    if (!sample.empty()) userText += "样例：" + sample;
+                    if (!p->spj.empty()) userText += "\n注意：本题使用 SPJ 特殊评测。\n";
+                    // 最近一次该题提交的判题结果
+                    for (size_t i = dataStore->submissions.size(); i > 0; i--) {
+                        Submission& sb = dataStore->submissions[i-1];
+                        if (sb.userId == user->id && sb.problemId == pid) {
+                            std::string jr = sb.judgeResult;
+                            if (jr.size() > 800) jr = jr.substr(0, 800) + "...";
+                            userText += "\n我最近一次提交的判题结果：\n" + jr + "\n";
+                            break;
+                        }
+                    }
+                } else {
+                    userText += "（题号 " + pid + " 不存在）\n";
+                }
+            } else {
+                userText += "（未指定题号，仅根据代码判断）\n";
+            }
+            userText += "\n【我的代码】\n```cpp\n" + code + "\n```\n";
+            if (!extra.empty()) userText += "\n【补充说明】\n" + extra + "\n";
+            if (!filePath.empty()) userText += "\n（代码来自工作区文件 " + filePath + "）\n";
+        } else if (task == "explain") {
+            std::string pid = req.count("problemId") ? common::trim(req["problemId"]) : "";
+            std::string statement = req.count("statement") ? req["statement"] : "";
+            std::string level = req.count("level") ? req["level"] : "普及";
+            sysText = "你是一名 OI 竞赛讲师。请针对题目给出思路讲解，不要输出完整可提交代码"
+                      "（关键片段最多 8 行）。结构：1) 题意抽象；2) 暴力思路与复杂度；"
+                      "3) 正解思路（关键观察/不变量）；4) 复杂度分析；5) 实现与坑点；6) 可以继续练习的题型。"
+                      "使用中文 Markdown，数学公式用 $...$。";
+            userText = "【水平】" + level + "\n";
+            if (!pid.empty()) {
+                Problem* p = dataStore->findProblemById(pid);
+                if (p) {
+                    std::string desc = p->description;
+                    if (desc.size() > 4000) desc = desc.substr(0, 4000) + "...";
+                    userText += "【题目】" + p->id + " " + p->title + "\n" + desc + "\n";
+                    if (!p->inputDesc.empty()) userText += "输入：" + p->inputDesc + "\n";
+                    if (!p->outputDesc.empty()) userText += "输出：" + p->outputDesc + "\n";
+                    if (!p->samples.empty()) userText += "样例：" + p->samples[0] + "\n";
+                } else {
+                    userText += "（题号 " + pid + " 不存在）\n";
+                }
+            }
+            if (!statement.empty()) {
+                if (statement.size() > 6000) statement = statement.substr(0, 6000) + "...";
+                userText += "【我贴的题面】\n" + statement + "\n";
+            }
+            if (userMessage.empty()) userText += "\n请给出这道题的思路讲解。";
+        } else {
+            sysText = "你是一个乐于助人的 AI 助手，请用简洁、清晰、有条理的中文回答。涉及代码请用 Markdown 代码块。"
+                      "你可以使用工具：在工作区读写文件、执行命令来验证想法；涉及编译运行请说明你在做什么。";
+        }
+
+        std::string sys = "{\"role\":\"system\",\"content\":" + common::jsonStringify(sysText) + "}";
+        std::string um = "{\"role\":\"user\",\"content\":" + common::jsonStringify(userText) + "}";
+        std::string messagesJson = "[" + sys;
+        if (history != "[]" && history.size() > 2) {
+            std::string h2 = history;
+            if (h2.front() == '[' && h2.back() == ']') h2 = h2.substr(1, h2.size() - 2);
+            if (!h2.empty()) messagesJson += "," + h2;
+        }
+        messagesJson += "," + um + "]";
+
+        std::string head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nConnection: close\r\nCache-Control: no-cache\r\n\r\n";
+        llmSendRaw(fd, head);
+        llmRunAgent(fd, dataStore, user->id, model, messagesJson, _remain, allowTools, task);
+        return;
+    }
+    if (path == "/llm/api/tools") {
+        aiquota::Info qi = aiquota::info(user->id, user->aiWindowQuota, user->aiMonthQuota);
+        std::string out = "{\"shell\":" + std::string(aitools::shellEnabled() ? "true" : "false") +
+                          ",\"workspace\":\"data/aiws/u" + user->id + "/\"" +
+                          ",\"spec\":" + aitools::specJson() +
+                          ",\"quota\":" + aiquota::jsonOf(qi) + "}";
+        llmSendJson(fd, 200, out);
+        return;
+    }
+    // ---------- 上传文件到 AI 工作区 ----------
+    if (path.compare(0, 12, "/llm/upload") == 0) {
+        std::string fname = "upload.bin";
+        size_t q = path.find("name=");
+        if (q != std::string::npos) {
+            std::string raw = path.substr(q + 5);
+            size_t amp = raw.find('&');
+            if (amp != std::string::npos) raw = raw.substr(0, amp);
+            fname = common::urlDecode(raw);
+        }
+        std::string saved;
+        if (body.empty()) { llmSendJson(fd, 400, "{\"error\":\"文件为空\"}"); return; }
+        if (!aitools::saveUpload(user->id, fname, body, saved)) {
+            llmSendJson(fd, 400, "{\"error\":\"保存失败（单文件上限 4MB）\"}");
+            return;
+        }
+        std::map<std::string, std::string> o;
+        o["ok"] = "true";
+        o["path"] = saved;
+        o["size"] = std::to_string(body.size());
+        llmSendJson(fd, 200, common::jsonStringify(o));
+        return;
+    }

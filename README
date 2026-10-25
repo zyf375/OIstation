@@ -1,0 +1,1 @@
+g++ -std=c++11 -Wall -O2 src/*.cpp -o oi_station.exe -lws2_32 -lpsapi -lwinpthread

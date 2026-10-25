@@ -1,0 +1,55 @@
+# ---- 构建产物 ----
+*.exe
+*.obj
+*.o
+*.dll
+*.lib
+*.pdb
+*.ilk
+build.err
+build.out
+run.log
+run.out.log
+run.err.log
+startup.log
+startup.err.log
+out.txt
+err.txt
+
+# ---- 运行期临时目录 ----
+temp/
+logs/
+*.tmp
+
+# ---- 测试数据（体积大，单独备份） ----
+problems/
+files/
+
+# ---- 历史备份 ----
+backup_v1.10.0/
+*.bak
+*.bak_*
+*.bak2_*
+*.bak.*
+
+# ---- 运行日志 / 缓存（体积与噪声） ----
+data/ai_debug.log
+data/ai_debug.on
+data/ai_log.json
+data/ai_cache.jsonl
+data/ai_models_cache_*.json
+data/*.log
+
+# ---- 密钥（绝不入库） ----
+data/ai_providers.json
+data/ai.json
+data/api_keys.json
+data/security.json
+_ck.txt
+tools/_ck.txt
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

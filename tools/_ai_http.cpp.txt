@@ -1,0 +1,156 @@
+// ---------- 底层 HTTP：GET/POST {baseUrl}/xxx ----------
+struct AiHttp {
+    bool ok = false;
+    long long status = 0;
+    std::string body;
+    std::string err;
+};
+static AiHttp aiRequest(const AiCfg& cfg, const wchar_t* verb, const std::string& apiPathIn,
+                        const std::string& body) {
+    AiHttp r;
+    std::string url = cfg.baseUrl;
+    bool https = true;
+    if (url.compare(0, 8, "https://") == 0) { https = true; url = url.substr(8); }
+    else if (url.compare(0, 7, "http://") == 0) { https = false; url = url.substr(7); }
+    std::string host = url, basePath;
+    size_t sl = url.find('/');
+    if (sl != std::string::npos) { host = url.substr(0, sl); basePath = url.substr(sl); }
+    INTERNET_PORT port = https ? INTERNET_PORT(443) : INTERNET_PORT(80);
+    size_t colon = host.find(':');
+    if (colon != std::string::npos) { port = (INTERNET_PORT)atoi(host.c_str() + colon + 1); host = host.substr(0, colon); }
+    std::string apiPath = basePath + apiPathIn;
+    std::wstring whost(host.begin(), host.end());
+    std::wstring wpath(apiPath.begin(), apiPath.end());
+
+    HINTERNET hSession = WinHttpOpen(L"OIStation/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) { r.err = "WinHttp 初始化失败"; return r; }
+    HINTERNET hConnect = WinHttpConnect(hSession, whost.c_str(), port, 0);
+    if (!hConnect) { WinHttpCloseHandle(hSession); r.err = "无法连接 AI 服务"; return r; }
+    DWORD flags = https ? WINHTTP_FLAG_SECURE : 0;
+    HINTERNET hReq = WinHttpOpenRequest(hConnect, verb, wpath.c_str(), NULL,
+                                        WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+    if (!hReq) { WinHttpCloseHandle(hConnect); WinHttpCloseHandle(hSession); r.err = "请求创建失败"; return r; }
+    DWORD timeout = 60000;
+    WinHttpSetOption(hReq, WINHTTP_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
+    std::wstring hdrs = L"Content-Type: application/json\r\nAuthorization: Bearer ";
+    hdrs += std::wstring(cfg.apiKey.begin(), cfg.apiKey.end());
+    hdrs += L"\r\nAccept: application/json\r\n";
+    bool sent = false;
+    if (body.empty())
+        sent = WinHttpSendRequest(hReq, hdrs.c_str(), (DWORD)hdrs.length(), WINHTTP_NO_REQUEST_DATA, 0, 0, 0)
+               && WinHttpReceiveResponse(hReq, NULL);
+    else
+        sent = WinHttpSendRequest(hReq, hdrs.c_str(), (DWORD)hdrs.length(),
+                                  (LPVOID)body.c_str(), (DWORD)body.length(), (DWORD)body.length(), 0)
+               && WinHttpReceiveResponse(hReq, NULL);
+    DWORD sc = 0, sz = sizeof(sc);
+    if (sent && WinHttpQueryHeaders(hReq, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                                    WINHTTP_HEADER_NAME_BY_INDEX, &sc, &sz, WINHTTP_NO_HEADER_INDEX))
+        r.status = sc;
+    if (sent) {
+        char buf[65536]; DWORD rd = 0;
+        while (WinHttpReadData(hReq, buf, sizeof(buf) - 1, &rd) && rd > 0) {
+            buf[rd] = '\0';
+            r.body += buf;
+            rd = 0;
+        }
+    }
+    WinHttpCloseHandle(hReq); WinHttpCloseHandle(hConnect); WinHttpCloseHandle(hSession);
+    if (!sent) { r.err = "AI 服务无响应"; return r; }
+    if (r.status != 200) {
+        std::string msg = jsonPeekString(r.body, "message");
+        r.err = msg.empty() ? ("AI 服务返回 " + std::to_string(r.status) + "：" + r.body.substr(0, 300)) : msg;
+        return r;
+    }
+    r.ok = true;
+    return r;
+}
+static AiHttp aiPostChat(const AiCfg& cfg, const std::string& body) {
+    return aiRequest(cfg, L"POST", "/chat/completions", body);
+}
+
+// ---------- 扫描服务端可用模型（GET /models） ----------
+struct AiModelInfo {
+    std::string id;
+    std::string name;
+};
+// 取出 JSON 中 "data":[...] 的数组文本
+static std::string aiSliceDataArray(const std::string& body) {
+    size_t p = body.find("\"data\"");
+    if (p == std::string::npos) return "";
+    size_t a = body.find('[', p);
+    if (a == std::string::npos) return "";
+    int depth = 0;
+    bool inStr = false, esc = false;
+    for (size_t i = a; i < body.size(); i++) {
+        char ch = body[i];
+        if (esc) { esc = false; continue; }
+        if (ch == '\\') { esc = true; continue; }
+        if (ch == '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (ch == '[') depth++;
+        else if (ch == ']') {
+            depth--;
+            if (depth == 0) return body.substr(a, i - a + 1);
+        }
+    }
+    return "";
+}
+
+// 扫描可用模型；refresh=false 时优先用 10 分钟缓存
+static std::vector<AiModelInfo> aiScanModels(bool refresh, std::string* errOut) {
+    AiCfg cfg = aiCfg();
+    std::string cacheFile = "./data/ai_models.json";
+    long long now = (long long)time(NULL);
+    if (!refresh) {
+        std::string raw = common::readFile(cacheFile);
+        if (!raw.empty()) {
+            auto o = common::jsonParseObject(raw);
+            long long ts = o.count("ts") ? common::stringToLongLong(o["ts"]) : 0;
+            if (now - ts < 600 && o.count("list")) {
+                std::vector<AiModelInfo> out;
+                auto items = common::split(o["list"], ';');
+                for (size_t i = 0; i < items.size(); i++) {
+                    auto kv = common::split(items[i], '|');
+                    if (kv.empty() || kv[0].empty()) continue;
+                    AiModelInfo mi;
+                    mi.id = kv[0];
+                    mi.name = kv.size() > 1 ? kv[1] : kv[0];
+                    out.push_back(mi);
+                }
+                if (!out.empty()) return out;
+            }
+        }
+    }
+    std::vector<AiModelInfo> out;
+    AiHttp r = aiRequest(cfg, L"GET", "/models", "");
+    if (!r.ok) {
+        if (errOut) *errOut = r.err;
+        return out;
+    }
+    std::string arr = aiSliceDataArray(r.body);
+    if (arr.empty()) { if (errOut) *errOut = "模型列表格式无法识别"; return out; }
+    auto items = common::jsonParseArray(arr);
+    for (size_t i = 0; i < items.size(); i++) {
+        std::string id = jsonPeekString(items[i], "id");
+        if (id.empty()) continue;
+        AiModelInfo mi;
+        mi.id = id;
+        mi.name = jsonPeekString(items[i], "name");
+        if (mi.name.empty()) mi.name = id;
+        out.push_back(mi);
+    }
+    // 写缓存
+    std::map<std::string, std::string> o;
+    o["ts"] = std::to_string(now);
+    std::string list;
+    for (size_t i = 0; i < out.size(); i++) {
+        if (i) list += ";";
+        list += out[i].id + "|" + out[i].name;
+    }
+    o["list"] = list;
+    common::writeFile(cacheFile, common::jsonStringify(o));
+    return out;
+}
+

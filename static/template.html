@@ -1,0 +1,23 @@
+<!DOCTYPE html><html><head><meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<title>OI小站 - @@TITLE@@</title>
+<link rel='stylesheet' href='/static/style.css?v=@@VERSION@@'>
+<script src='/static/app.js'></script>
+<script src='/static/mention.js' defer></script>
+</head><body>
+<div class='app'>
+@@NAV@@
+<main class='main'>
+@@TOPBAR@@
+<div class='page-head'><h1>@@TITLE@@</h1></div>
+<div class='container'>@@CONTENT@@</div>
+<footer class='site-footer'>© 2026 OI 小站 v @@VERSION@@ · 基于 C++11 的在线判题系统</footer>
+</main>
+</div>
+<div id='bgSel' class='bg-sel'>
+<button onclick="pickBg(0)" class="bg-swatch" style="background:#eef3f8" title="纯色"></button>
+<button onclick="pickBg(1)" class="bg-swatch" style="background:linear-gradient(160deg,#bfd9ef,#eef4fb)" title="蓝天"></button>
+<button onclick="pickBg(2)" class="bg-swatch" style="background:linear-gradient(160deg,#bfe3d3,#eef6f1)" title="青绿"></button>
+<button onclick="pickBg(3)" class="bg-swatch" style="background:linear-gradient(160deg,#f0e2c8,#faf6ee)" title="暖阳"></button>
+</div>
+</body></html>

@@ -1,0 +1,18 @@
+const fs = require('fs');
+const H='F:/LL/OIstation/src/handlers.cpp';
+let h=fs.readFileSync(H,'latin1').replace(/\r\n/g,'\n');
+const anchor=`    content += "<p style='color:#7f8c8d;font-size:13px;'>\\u672c\\u9875\\u5185\\u5bb9\\u4e3a\\u7cfb\\u7edf\\u56fa\\u5b9a\\u4fe1\\u606f\\uff0c\\u4e0d\\u53ef\\u4fee\\u6539\\u3002</p>";
+    content += "</div>";`;
+const add=String.raw`    content += "<h3>\u514d\u8d23\u58f0\u660e</h3>";
+    content += "<ul style='line-height:1.9;color:#555;padding-left:20px;'>";
+    content += "<li>\u672c\u7cfb\u7edf\u4ec5\u4f9b\u5b66\u4e60\u4ea4\u6d41\u4e0e\u4e2a\u4eba\u4f7f\u7528\uff0c\u4e0d\u7528\u4e8e\u4efb\u4f55\u5546\u4e1a\u7528\u9014\u3002</li>";
+    content += "<li>\u7528\u6237\u5728\u672c\u7ad9\u63d0\u4ea4\u3001\u4e0a\u4f20\u6216\u53d1\u5e03\u7684\u5185\u5bb9\uff08\u5305\u62ec\u4f46\u4e0d\u9650\u4e8e\u4ee3\u7801\u3001\u6587\u4ef6\u3001\u5e16\u5b50\u3001\u8bc4\u8bba\uff09\u7531\u7528\u6237\u81ea\u884c\u8d1f\u8d23\uff0c\u7cfb\u7edf\u4e0d\u627f\u62c5\u76f8\u5173\u8d23\u4efb\u3002</li>";
+    content += "<li>\u5f00\u53d1\u8005\u4e0d\u5bf9\u56e0\u4f7f\u7528\u672c\u7cfb\u7edf\u800c\u4ea7\u751f\u7684\u4efb\u4f55\u76f4\u63a5\u6216\u95f4\u63a5\u635f\u5931\u627f\u62c5\u8d23\u4efb\u3002</li>";
+    content += "<li>\u8bf7\u9075\u5b88\u56fd\u5bb6\u6cd5\u5f8b\u6cd5\u89c4\u4e0e\u7248\u6743\u89c4\u5b9a\uff0c\u5c0a\u91cd\u4ed6\u4eba\u77e5\u8bc6\u4ea7\u6743\u3002</li>";
+    content += "<li>\u5982\u672c\u7ad9\u5185\u5bb9\u6d89\u5acc\u4fb5\u6743\uff0c\u8bf7\u8054\u7cfb\u7ba1\u7406\u5458\u5904\u7406\u3002</li>";
+    content += "</ul>";
+    content += "</div>";`;
+if(h.indexOf(anchor)<0) throw new Error('anchor not found');
+h=h.replace(anchor,add);
+fs.writeFileSync(H,h,'latin1');
+console.log('disclaimer added to handleAbout');

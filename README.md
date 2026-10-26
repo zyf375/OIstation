@@ -98,7 +98,7 @@ Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
 
 ## 账号与密码
 
-- 初始管理员：`admin` / `20121202` —— **部署后请立即修改**。
+- 初始管理员：`admin` / `admin123` —— **部署后请立即修改**。
 - 密码不以明文保存：`sha256$10000$<salt>$<hash>`（SHA-256 + 16 位随机盐 + 10000 次迭代）。
 - 旧明文密码在启动时自动幂等迁移为哈希；登录成功也会兜底升级。
 - 管理员可在 `/admin/users` 直接重置任意用户密码。
